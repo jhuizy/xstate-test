@@ -1,6 +1,4 @@
 import { Machine, interpret, assign, EventObject, StateSchema, State, OmniEvent } from 'xstate';
-import { promisify } from 'util'
-import { html, render } from 'lit-html'
 import * as Rx from "rxjs"
 import * as RxOp from "rxjs/operators";
 
@@ -58,38 +56,41 @@ const stateMachine = Machine<Context, Schema, Event>({
   }
 });
 
-const service = interpret(stateMachine).start();
-
-const template = (ctx: Context, sender: (event: OmniEvent<Event>) => void) => {
-
-  const { pricePerLitre, litres } = ctx;
-  const balance = litres * pricePerLitre;
-
-  const liftHandler = (e: any) => { sender('LIFT') }
-  const dropHandler = (e: any) => { sender('UNLIFT') }
-  const pumpHandler = (e: any) => { sender('SQUEEZE') }
-  const stopHandler = (e: any) => { sender('UNSQUEEZE') }
-  const payHandler = (e: any) => { sender('PAY')}
-
-  return html`
-  <div>
-    <span>Price Per Litre: ${pricePerLitre}</span>
-    <span>Litres: ${litres}</span>
-    <span>Total: ${balance}</span>
-    <button @click=${liftHandler}>Lift Nozzle</button>
-    <button @click=${dropHandler}>Drop Nozzle</button>
-    <button @click=${pumpHandler}>Pump Nozzle</button>
-    <button @click=${stopHandler}>Stop Nozzle</button>
-    <button @click=${payHandler}>Pay</button>
-  </div>
-  `
+const mkButtonSender = (cls: string, event: OmniEvent<Event>) => {
+  const el = document.querySelector(`button.${cls}`);
+  if (el) {
+    el.addEventListener('click', (e) => {
+      service.send(event);
+    });
+  }
 }
+
+const mkText = (cls: string, text: string) => {
+  const el = document.querySelector(`span.${cls}`);
+  if (el) {
+    el.innerHTML = text;
+  }
+}
+
+mkButtonSender('lift', 'LIFT');
+mkButtonSender('drop', 'UNLIFT');
+mkButtonSender('pump', 'SQUEEZE');
+mkButtonSender('stop', 'UNSQUEEZE');
+mkButtonSender('pay', 'PAY');
+
+const service = interpret(stateMachine).start();
 
 Rx.interval(1000).subscribe(i => service.send('TICK'));
 service.onEvent((event) => {
   if (event.type == 'PAY') {
-    Rx.interval(500).pipe(RxOp.take(1)).subscribe(i => service.send('PAYED'));
+    Rx.interval(2000).pipe(RxOp.take(1)).subscribe(i => service.send('PAYED'));
   }
 })
 
-service.onChange(ctx => render(template(ctx, service.send), document.body));.z
+service.onChange((ctx: Context) => {
+  const { pricePerLitre, litres }  = ctx;
+  const balance = pricePerLitre * litres;
+  mkText('pricePerLitre', `${pricePerLitre}`);
+  mkText('litres', `${litres}`);
+  mkText('balance', `${balance}`)
+})
